@@ -20,12 +20,17 @@
 #include "friLBRClient.h"
 #include "friUdpConnection.h"
 
+#include "drake/common/never_destroyed.h"
 #include "drake/lcmt_iiwa_command.hpp"
 #include "drake/lcmt_iiwa_status.hpp"
 #include "drake/lcmt_iiwa_status_telemetry.hpp"
 
 #include "low_pass_filter.h"
 
+#include "common/profiler_lcm_stats.h"
+
+using anzu::ProfilerAll;
+using anzu::LapTimer;
 
 using drake::lcmt_iiwa_command;
 using drake::lcmt_iiwa_status;
@@ -43,6 +48,11 @@ const double kJointLimitSafetyMarginDegree = 1;
 const double kJointTorqueSafetyMarginNm = 60;
 const double kJointTorqueSafetyMarginScale[kNumJoints] = {1, 1, 1, 0.5,
                                                           0.2, 0.2, 0.1};
+
+ProfilerAll& prof_all() {
+  static drake::never_destroyed<ProfilerAll> prof_all("PROFILER_IIWA");
+  return prof_all.access();
+}
 
 double ToRadians(double degrees) {
   return degrees * M_PI / 180.;
@@ -393,6 +403,10 @@ class KukaLCMClient  {
   }
 
   void PublishStateUpdate() {
+    static LapTimer& timer =
+        prof_all().profiler().AddTimer("PublishStateUpdate.Across");
+    timer.lap();
+
     const uint64_t now =
         std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -415,6 +429,10 @@ class KukaLCMClient  {
   void HandleCommandMessage(const lcm::ReceiveBuffer* rbuf,
                             const std::string& chan,
                             const lcmt_iiwa_command* command) {
+    static LapTimer& timer =
+        prof_all().profiler().AddTimer("HandleCommandMessage.Across");
+    timer.lap();
+
     if (!command_started_) {
       throw std::runtime_error("First command received within guard time.  "
                                "Aborting.");
@@ -681,6 +699,8 @@ int do_main() {
     if (robot_stepped) {
       lcm_client.PublishStateUpdate();
     }
+
+    prof_all().Publish();
   }
 
   for (int i = 0; i < FLAGS_num_robots; i++) {
