@@ -460,8 +460,9 @@ class KukaFRIClient : public KUKA::FRI::LBRClient {
 
   ~KukaFRIClient() {}
 
-  virtual void onStateChange(KUKA::FRI::ESessionState oldState,
-                             KUKA::FRI::ESessionState newState) {
+  void onStateChange(
+      KUKA::FRI::ESessionState oldState,
+      KUKA::FRI::ESessionState newState) override {
     KUKA::FRI::LBRClient::onStateChange(oldState, newState);
 
     const KUKA::FRI::LBRState& state = robotState();
@@ -508,7 +509,7 @@ class KukaFRIClient : public KUKA::FRI::LBRClient {
     }
   }
 
-  virtual void monitor() {
+  void monitor() override {
     KUKA::FRI::LBRClient::monitor();
     lcm_client_->UpdateRobotState(robot_id_, robotState());
     if (!lcm_client_->CheckSafety(robot_id_)) {
@@ -518,7 +519,7 @@ class KukaFRIClient : public KUKA::FRI::LBRClient {
     }
   }
 
-  virtual void waitForCommand() {
+  void waitForCommand() override {
     KUKA::FRI::LBRClient::waitForCommand();
 
     // The value of the torques sent in waitForCommand doesn't matter,
@@ -536,7 +537,7 @@ class KukaFRIClient : public KUKA::FRI::LBRClient {
     }
   }
 
-  virtual void command() {
+  void command() override {
     lcm_client_->UpdateRobotState(robot_id_, robotState());
     if (!lcm_client_->CheckSafety(robot_id_)) {
       lcm_client_->PrintRobotState(robot_id_, std::cerr);
