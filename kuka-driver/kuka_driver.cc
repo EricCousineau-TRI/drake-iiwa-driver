@@ -20,6 +20,7 @@
 #include "friLBRClient.h"
 #include "friUdpConnection.h"
 
+#include "drake/common/drake_assert.h"
 #include "drake/lcmt_iiwa_command.hpp"
 #include "drake/lcmt_iiwa_status.hpp"
 #include "drake/lcmt_iiwa_status_telemetry.hpp"
@@ -546,31 +547,36 @@ class KukaFRIClient : public KUKA::FRI::LBRClient {
     }
 
     double pos[kNumJoints] = { 0., 0., 0., 0., 0., 0., 0.};
-    const bool command_valid =
-        lcm_client_->GetPositionCommand(robot_id_, pos);
-    if (inhibit_motion_in_command_state_ || !command_valid) {
-      // No command received, just command the position when we
-      // entered command state.
-      assert(joint_position_when_command_entered_.size() == kNumJoints);
-      memcpy(pos, joint_position_when_command_entered_.data(),
-             kNumJoints * sizeof(double));
-    } else {
-      // Only apply the joint limits when we're responding to LCM.  If
-      // we don't want to command motion, don't change anything.
-      ApplyJointLimits(pos);
-    }
+    // const bool command_valid =
+    //     lcm_client_->GetPositionCommand(robot_id_, pos);
+    // if (inhibit_motion_in_command_state_ || !command_valid) {
+    //   // No command received, just command the position when we
+    //   // entered command state.
+    //   assert(joint_position_when_command_entered_.size() == kNumJoints);
+    //   memcpy(pos, joint_position_when_command_entered_.data(),
+    //          kNumJoints * sizeof(double));
+    // } else {
+    //   // Only apply the joint limits when we're responding to LCM.  If
+    //   // we don't want to command motion, don't change anything.
+    //   ApplyJointLimits(pos);
+    // }
+    // Loopback current state. We should have zero position and velocity gains
+    // but I (Eric) think this makes the controller happy (won't get "Illegal
+    // axis delta" or what not).
+    memcpy(
+        pos, robotState().getMeasuredJointPosition(),
+        kNumJoints * sizeof(double));
     robotCommand().setJointPosition(pos);
 
     // Check if we're in torque mode, and send torque commands too if
     // we are.
-    if (robotState().getClientCommandMode() == KUKA::FRI::TORQUE) {
-      double torque[kNumJoints] = { 0., 0., 0., 0., 0., 0., 0.};
-      if (command_valid && !inhibit_motion_in_command_state_) {
-        lcm_client_->GetTorqueCommand(robot_id_, torque);
-      }
-      // TODO(sam.creasey): Is there a sensible torque limit to apply here?
-      robotCommand().setTorque(torque);
-    }
+    DRAKE_DEMAND(robotState().getClientCommandMode() == KUKA::FRI::TORQUE);
+    double torque[kNumJoints] = { 0., 0., 0., 0., 0., 0., 0.};
+    lcm_client_->GetTorqueCommand(robot_id_, torque);
+    // if (command_valid && !inhibit_motion_in_command_state_) {
+    // }
+    // TODO(sam.creasey): Is there a sensible torque limit to apply here?
+    robotCommand().setTorque(torque);
   }
 
  private:
