@@ -597,10 +597,19 @@ class KukaFRIClient : public KUKA::FRI::LBRClient {
           std::cerr
               << "Torque command expiration! Engaging holding controller."
               << std::endl;
+          // Update hold position.
+          std::memcpy(
+              joint_position_when_command_entered_.data(),
+              pos_measured, kNumJoints * sizeof(double));
           warned_about_expiration_ = true;
         }
       } else {
-        warned_about_expiration_ = false;
+        if (warned_about_expiration_) {
+          std::cerr
+              << "Received fresh command. Resuming nominal control."
+              << std::endl;
+          warned_about_expiration_ = false;
+        }
       }
 
       if (inhibit_motion_in_command_state_ || !command_valid) {
