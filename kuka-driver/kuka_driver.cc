@@ -101,13 +101,19 @@ DEFINE_double(start_command_guard, 0.250, "Duration after publishing the "
               "previous invocation of this driver.");
 DEFINE_double(time_step, 0.005, "Desired time step.");
 
-DEFINE_bool(torque_only, false, "Send torques only.");
+DEFINE_bool(
+    torque_only, false, "Send torques only; should set --time_step=0.001");
 DEFINE_double(
     torque_only_kp_scale, 1.0,
     "Scaling for position gains when inactive.");
 DEFINE_double(
     torque_only_kd_scale, 1.0,
     "Scaling for velocity gains when inactive.");
+DEFINE_double(
+    command_expire, 0.05,
+    "Time since last receipt of message to indicate expiration. This will "
+    "make the driver inhibit motion. At present, only used for "
+    "--torque_only=true.");
 
 namespace kuka_driver {
 
@@ -428,6 +434,12 @@ class KukaLCMClient  {
     lcm_.publish(FLAGS_lcm_status_telemetry_channel, &lcm_status_telemetry_);
   }
 
+  bool IsCommandExpired() const {
+    const uint64_t expire_utime = FLAGS_command_expire * 1e6;
+    const uint64_t stale_utime = micros() - command_receipt_utime_;
+    return stale_utime > expire_utime;
+  }
+
  private:
   void HandleCommandMessage(const lcm::ReceiveBuffer* rbuf,
                             const std::string& chan,
@@ -437,6 +449,7 @@ class KukaLCMClient  {
                                "Aborting.");
     }
     lcm_command_ = *command;
+    command_receipt_utime_ = micros();
   }
 
   const int num_joints_;
@@ -444,7 +457,7 @@ class KukaLCMClient  {
   lcmt_iiwa_status lcm_status_{};
   lcmt_iiwa_status_telemetry lcm_status_telemetry_{};
   lcmt_iiwa_command lcm_command_{};
-
+  uint64_t command_receipt_utime_{};
   std::vector<double> external_torque_limit_;
 
   // Filters
@@ -576,7 +589,20 @@ class KukaFRIClient : public KUKA::FRI::LBRClient {
       robotCommand().setJointPosition(pos);
 
       double torque[kNumJoints] = { 0., 0., 0., 0., 0., 0., 0.};
+
       bool command_valid = lcm_client_->GetTorqueCommand(robot_id_, torque);
+      if (command_valid && lcm_client_->IsCommandExpired()) {
+        command_valid = false;
+        if (!warned_about_expiration_) {
+          std::cerr
+              << "Torque command expiration! Engaging holding controller."
+              << std::endl;
+          warned_about_expiration_ = true;
+        }
+      } else {
+        warned_about_expiration_ = false;
+      }
+
       if (inhibit_motion_in_command_state_ || !command_valid) {
         // Position control holding current position.
         const double* pos_desired =
@@ -638,6 +664,7 @@ class KukaFRIClient : public KUKA::FRI::LBRClient {
   std::vector<double> joint_position_when_command_entered_;
   bool has_entered_command_state_{false};
   bool inhibit_motion_in_command_state_{false};
+  bool warned_about_expiration_{};
 };
 
 int do_main() {
