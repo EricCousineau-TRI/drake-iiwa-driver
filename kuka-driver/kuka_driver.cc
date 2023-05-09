@@ -226,7 +226,7 @@ class KukaLCMClient  {
     PrintVector(external_torque_limit_, 0, kNumJoints, std::cerr);
 
     // Initialize filters.
-    const double cutoff_hz = 40;
+    const double cutoff_hz = 200;
     vel_filters_.resize(
         num_joints_, DiscreteTimeLowPassFilter<double>(
             cutoff_hz, FLAGS_time_step));
@@ -549,7 +549,7 @@ class KukaFRIClient : public KUKA::FRI::LBRClient {
   void monitor() override {
     KUKA::FRI::LBRClient::monitor();
     lcm_client_->UpdateRobotState(robot_id_, robotState());
-    
+
     // IIR filter initialization with measured data (should be run always)
     for( int i=0; i<numIIRCoeff+1; i++ ) {
         IIRFilter(robotState().getMeasuredJointPosition());
@@ -681,7 +681,7 @@ class KukaFRIClient : public KUKA::FRI::LBRClient {
     }
   }
 
-  // IIR filter for joint position command. This is a hack to trigger the 
+  // IIR filter for joint position command. This is a hack to trigger the
   // friction observer within the IIWA. The friction observer is only triggered
   // when there is a position difference. So, an IIR filter is used so that there
   // is a small delay between the measured position and the commanded position.
@@ -718,7 +718,7 @@ class KukaFRIClient : public KUKA::FRI::LBRClient {
           for(n=1; n<=numIIRCoeff; n++) {
             iir_filtered_output_[i][0] += ACoef[n] * iir_filter_input_[i][n] - BCoef[n] * iir_filtered_output_[i][n];
           }
-              
+
       }
   }
 
